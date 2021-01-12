@@ -9,7 +9,7 @@ import os
 
 class Data(object):
 
-    def __init__(self, disp_list, force_list, data_type, reincr=0.1, reprotocol=None):
+    def __init__(self, disp_list, force_list, data_type, reincr=0.01, reprotocol=None):
         """
         :param disp_list: displacement list
         :param force_list: force list
@@ -53,7 +53,7 @@ class Data(object):
         :return: the cross point lists of the two lines
         """
         cross_point_list = []
-        lower_bound, upper_bound = min(line1[0]+line2[0]), max(line1[0]+line2[0])
+        lower_bound, upper_bound = min(line1[0]+line2[0]), max(line1[0]+line2[0])*1.5
         incr = (upper_bound - lower_bound) / 10000.0
         f1 = interp1d(line1[0], line1[1], fill_value='extrapolate')
         f2 = interp1d(line2[0], line2[1], fill_value='extrapolate')
@@ -319,7 +319,7 @@ class Data(object):
             else:
                 raise Exception('cyc_trans not correct')
         # re-organize curve
-        curve = self.reorg(curve)
+        curve = self.reorg(curve, incr=self.incr)
         # > calculate yield point
         # declare vars
         yield_point = [None, None]
@@ -336,19 +336,26 @@ class Data(object):
             k1 = (point_0d4[1] - point_0d1[1]) / (point_0d4[0] - point_0d1[0])
             line_alpha = [[point_0d1[0], point_0d4[0]], [point_0d1[1], point_0d4[1]]]
             k2 = 1.0 / 6.0 * k1
-            tangent_point = self.tangent_point(curve, k2)[0]
-            line_beta = [[0, tangent_point[0]], [tangent_point[1] - tangent_point[0] * k2, tangent_point[1]]]
-            possible_point = self.cross_point(line_alpha, line_beta)
-            if disp_range:
-                for disp, force in zip(possible_point[0], possible_point[1]):
-                    if disp in disp_range:
-                        yield_point = [disp, force]
+            tangent_point_list = self.tangent_point(curve, k2)
+            print(tangent_point_list)
+            for tangent_point in tangent_point_list:
+                line_beta = [[0, tangent_point[0]], [tangent_point[1] - tangent_point[0] * k2, tangent_point[1]]]
+                possible_point = self.cross_point(line_alpha, line_beta)[0]
+                if disp_range:
+                    if disp_range[0] <= possible_point[0] <= disp_range[1]:
+                        yield_point = possible_point.copy()
+                        # additional plot option
+                        addition = [
+                            [line_alpha[0] + [yield_point[0]], '', line_alpha[1] + [yield_point[1]], '', '', 'b', None],
+                            [line_beta[0], '', line_beta[1], '', '', 'b', None]]
                         break
-            else:
-                yield_point = possible_point[0]
-            # additional plot option
-            addition = [[line_alpha[0]+[yield_point[0]], '', line_alpha[1]+[yield_point[1]], '', '', 'b', None],
+                else:
+                    yield_point = possible_point.copy()
+                    # additional plot option
+                    addition = [
+                        [line_alpha[0] + [yield_point[0]], '', line_alpha[1] + [yield_point[1]], '', '', 'b', None],
                         [line_beta[0], '', line_beta[1], '', '', 'b', None]]
+                    break
         elif method.lower() in "eeep":
             pass
         else:

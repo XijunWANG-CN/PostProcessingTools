@@ -113,6 +113,23 @@ class Data(object):
         pl.legend()
         pl.show()
 
+    @staticmethod
+    def saveitem(item_name_list, item_list, filename):
+        """
+        :param item_list:
+        :param filename:
+        :return:
+        """
+        with open('%s.txt'%filename, "w") as f:
+            for item_name in item_name_list:
+                f.write("%s " % item_name)
+            f.write("\n")
+            for line_number in range(len(item_list[0])):
+                for item in item_list:
+                    f.write('%.f '%item[line_number])
+                f.write('\n')
+        f.close()
+
     @property
     def data_type(self):
         """
@@ -137,6 +154,40 @@ class Data(object):
         """
         basics = [[self.disp_list, 'deformation', self.force_list, 'force', 'original curve', "k", None]]
         self.plotitem(basics)
+
+    def plotprocedure(self, plottime=60):
+        """
+        :param plottime: time (seconds) for data plot
+        :return:
+        """
+        # modify data to match plot time
+        datanumber = len(self.disp_list)
+        filternum = int(datanumber / plottime * 0.05)
+        modisp_list, moforce_list = [], []
+        for i in range(datanumber):
+            if filternum == 0:
+                filternum = 1
+            if i % filternum == 0:
+                modisp_list.append(self.disp_list[i])
+                moforce_list.append(self.force_list[i])
+        modisp_s = [modisp_list[0], modisp_list[1]]
+        moforce_s = [moforce_list[0], moforce_list[1]]
+        max_disp, min_disp= modisp_list[0], modisp_list[0]
+        max_force, min_force = moforce_list[0], moforce_list[0]
+        # plot
+        pl.xlabel('disp')
+        pl.ylabel('force')
+        for i in range(len(moforce_list) - 1):
+            # update the two points
+            modisp_s[0], modisp_s[1] = modisp_list[i], modisp_list[i + 1]
+            moforce_s[0], moforce_s[1] = moforce_list[i], moforce_list[i + 1]
+            min_disp, max_disp = min(modisp_s[1], min_disp), max(modisp_s[1], max_disp)
+            min_force, max_force = min(moforce_s[1], min_force), max(moforce_s[1], max_force)
+            pl.plot(modisp_s, moforce_s, "b")
+            pl.xlim(min_disp * 1.2, max_disp * 1.2)
+            pl.ylim(min_force * 1.2, max_force * 1.2)
+            pl.pause(0.05)
+        pl.show()
 
     def cyc_index_list(self):
         """
@@ -181,9 +232,10 @@ class Data(object):
             raise Exception('Cycle number out of range')
         return [disp_list_cycle, force_list_cycle]
 
-    def obtain_protocol(self, plotopt=None):
+    def obtain_protocol(self, plotopt=None, saveopt=None):
         """
         :param plotopt: determine if plot a figure
+        :param saveopt: determine if save a text file
         :return: protocol for the input data, in form of [cycle_list, protocol_list, proindex_list]
         """
         protocol, procycle, proindex = [0, ], [0, ], [0, ]
@@ -216,11 +268,16 @@ class Data(object):
         if plotopt:
             basics = [[procycle, 'cycle number', protocol, 'deformation', 'Protocol', 'k', None]]
             self.plotitem(basics)
+        # determine if save a text file
+        if saveopt:
+            item_name_list, item_list, filename = ['cycle number', 'disp'], [procycle, protocol], 'protocol'
+            self.saveitem(item_name_list, item_list, filename)
         return [procycle, protocol, proindex]
 
-    def reorgdata(self, plotopt=None):
+    def reorgdata(self, plotopt=None, saveopt=None):
         """
         :param plotopt: determine if plot a figure
+        :param saveopt: determine if save a text file
         :return: re-organized data, in form of [disp_list_new, force_list_new]
         """
         # set protocol
@@ -229,7 +286,7 @@ class Data(object):
         # declare variables
         reorg_disp_list, reorg_force_list = [], []
         # re-organized data
-        for i in range(len(protocol)-2):
+        for i in range(len(protocol)-1):
             disp_sec = self.disp_list[proindex[i]:proindex[i+1]]
             force_sec = self.force_list[proindex[i]:proindex[i+1]]
             range_sec = [protocol[i], protocol[i+1]]
@@ -241,11 +298,17 @@ class Data(object):
             basics = [[self.disp_list, 'deformation', self.force_list, 'force', 'original data', 'k', None],
                       [reorg_disp_list, 'deformation', reorg_force_list, 'force', 're-organized data', "r", None]]
             self.plotitem(basics)
+        # determine if save a text file
+        if saveopt:
+            item_name_list, item_list, filename = ['disp', 'force'], [reorg_disp_list, reorg_force_list], \
+                                                  're-organized data'
+            self.saveitem(item_name_list, item_list, filename)
         return [reorg_disp_list, reorg_force_list]
 
-    def backbone(self, plotopt=None):
+    def backbone(self, plotopt=None, saveopt=None):
         """
         :param plotopt: determine if plot a figure
+        :param saveopt: determine if save a text file
         :return: backbone curve, in form of [disp_list,force_list]
         """
         if self.data_type.lower() in "mono":
@@ -283,12 +346,17 @@ class Data(object):
             basics = [[self.disp_list, 'deformation', self.force_list, 'force', 'Hysteresis', 'k', None],
                       [backbone[0], 'deformation', backbone[1], 'force', 'backbone', 'r', '*']]
             self.plotitem(basics)
+        # determine if save a text file
+        if saveopt:
+            item_name_list, item_list, filename = ['disp', 'force'], backbone, 'backbone'
+            self.saveitem(item_name_list, item_list, filename)
         return backbone
 
-    def energy(self, cumulative=None, plotopt=None):
+    def energy(self, cumulative=None, plotopt=None, saveopt=None):
         """
         :param cumulative: decide whether the cumulative energy is considered
-        :param plotopt:
+        :param plotopt: determine if plot a figure
+        :param saveopt: determine if save a text file
         :return: Energy dissipated in each cycle (or Energy cumulated for each cycle),
         in form of [cycle_list,energy_list]
         """
@@ -307,15 +375,22 @@ class Data(object):
             label = 'cumulative energy' if cumulative else 'energy in cycle'
             basics = [[cycle_list, 'cycle number', energy_list, 'energy', label, "k", None]]
             self.plotitem(basics)
+        # determine if save a text file
+        if saveopt:
+            item_name_list = ['cycle number', 'cumulative energy'] if cumulative else ['cycle no', 'energy in cycle']
+            item_list = [cycle_list, energy_list]
+            filename = 'cumulative energy' if cumulative else 'energy in cycle'
+            self.saveitem(item_name_list, item_list, filename)
         return [cycle_list, energy_list]
 
-    def yield_point(self, method, cyc_trans='positive', disp_range=None, plotopt=None):
+    def yield_point(self, method, cyc_trans='positive', disp_range=None, plotopt=None, saveopt=None):
         """
         :param method: method for calculating yield point (opt: 'yk', 'eeep', 'cen', 'kc', 'csiro')
         :param cyc_trans: determine if transfer side of backbone curve for cyc_full data
                           (default = 'positive', opt:'negative')
         :param disp_range: pre-defined range for the yield point
         :param plotopt: determine if plot a figure
+        :param saveopt: determine if save a text file
         :return: yield_point, in form of [disp, force]
         """
         # determine curve
@@ -368,6 +443,7 @@ class Data(object):
             else:
                 tangent_point = tangent_point_list[0]
                 line_beta = [[0, tangent_point[0]], [tangent_point[1] - tangent_point[0] * k2, tangent_point[1]]]
+                yield_point = self.cross_point(line_alpha, line_beta)[0]
             # additional plot option
             addition = [
                 [line_alpha[0] + [yield_point[0]], '', line_alpha[1] + [yield_point[1]], '', '', 'b', None],
@@ -385,6 +461,10 @@ class Data(object):
                 basics.append([self.backbone()[0], 'deformation', self.backbone()[1], 'force', 'backbone', "r", "*"])
             basics.append([[yield_point[0]], '', [yield_point[1]], '', 'yield point', "g", "o"])
             self.plotitem(basics, addition=addition)
+        # determine if save a text file
+        if saveopt:
+            item_name_list, item_list, filename= ['yield disp', 'yield force'], yield_point, 'yield point'
+            self.saveitem(item_name_list, item_list, filename)
         return yield_point
 
 

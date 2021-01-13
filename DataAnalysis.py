@@ -56,7 +56,7 @@ class Data(object):
         """
         cross_point_list = []
         lower_bound, upper_bound = min(line1[0]+line2[0]), max(line1[0]+line2[0])*1.5
-        incr = (upper_bound - lower_bound) / 10000.0
+        incr = (upper_bound - lower_bound) / 1000.0
         f1 = interp1d(line1[0], line1[1], fill_value='extrapolate')
         f2 = interp1d(line2[0], line2[1], fill_value='extrapolate')
         line1_x_list = list(np.arange(lower_bound, upper_bound, incr))
@@ -68,6 +68,20 @@ class Data(object):
                 cross_point = [line1_x_list[index], line1_y_list[index]]
                 cross_point_list.append(cross_point)
         return cross_point_list
+
+    @staticmethod
+    def line_cross_point(line1, line2):
+        """
+        :param line1: the first line
+        :param line2: the second line
+        :return: the cross point lists of the two lines
+        """
+        x1_1, x1_2, y1_1, y1_2 = line1[0][0], line1[0][1], line1[1][0], line1[1][1]
+        x2_1, x2_2, y2_1, y2_2 = line2[0][0], line2[0][1], line2[1][0], line2[1][1]
+        k1, k2 = (y1_1 - y1_2)/(x1_1 - x1_2), (y2_1 - y2_2)/(x2_1 - x2_2)
+        b1, b2 = y1_1 - k1 * x1_1, y2_1 - k2 * x2_1
+        line_cross_point = [(b2 - b1) / (k1 - k2), k1 * (b2 - b1) / (k1 - k2) + b1]
+        return line_cross_point
 
     @staticmethod
     def tangent_point(line, slope, direction='top'):
@@ -126,7 +140,7 @@ class Data(object):
             f.write("\n")
             for line_number in range(len(item_list[0])):
                 for item in item_list:
-                    f.write('%.f '%item[line_number])
+                    f.write('%f '%item[line_number])
                 f.write('\n')
         f.close()
 
@@ -421,9 +435,9 @@ class Data(object):
         basics = []
         addition = []
         # y&k method
-        if method.lower() in "y&k" or "yk":
+        if method.lower() in "cen":
             maxforce, maxdisp = max(self.force_list), max(self.disp_list)
-            force_0d1, force_0d4 = maxforce * 0.1, maxforce * 0.4
+            force_0d1, force_0d4 = maxforce * 0.1 maxforce * 0.4
             line_0d1 = [[0, maxdisp], [force_0d1, force_0d1]]
             line_0d4 = [[0, maxdisp], [force_0d4, force_0d4]]
             point_0d1 = self.cross_point(line_0d1, curve)[0]
@@ -436,14 +450,14 @@ class Data(object):
             if disp_range:
                 for tangent_point in tangent_point_list:
                     line_beta = [[0, tangent_point[0]], [tangent_point[1] - tangent_point[0] * k2, tangent_point[1]]]
-                    possible_point = self.cross_point(line_alpha, line_beta)[0]
+                    possible_point = self.line_cross_point(line_alpha, line_beta)
                     if disp_range[0] <= possible_point[0] <= disp_range[1]:
                         yield_point = possible_point.copy()
                         break
             else:
                 tangent_point = tangent_point_list[0]
                 line_beta = [[0, tangent_point[0]], [tangent_point[1] - tangent_point[0] * k2, tangent_point[1]]]
-                yield_point = self.cross_point(line_alpha, line_beta)[0]
+                yield_point = self.line_cross_point(line_alpha, line_beta)
             # additional plot option
             addition = [
                 [line_alpha[0] + [yield_point[0]], '', line_alpha[1] + [yield_point[1]], '', '', 'b', None],

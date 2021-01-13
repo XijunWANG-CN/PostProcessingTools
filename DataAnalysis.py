@@ -9,7 +9,7 @@ import os
 
 class Data(object):
 
-    def __init__(self, disp_list, force_list, data_type, reincr=0.01, reprotocol=None):
+    def __init__(self, disp_list, force_list, data_type=None, reincr=0.01, reprotocol=None):
         """
         :param disp_list: displacement list
         :param force_list: force list
@@ -19,9 +19,11 @@ class Data(object):
         """
         self.disp_list = disp_list
         self.force_list = force_list
-        self.data_type = data_type
+        self.true_data_type = data_type
         self.incr = reincr
         self.protocol = reprotocol
+        self.maxdisp = max(self.disp_list)
+        self.mindisp = min(self.disp_list)
 
     @staticmethod
     def reorg(data, set_range=None, incr=None, datanumber=100.0):
@@ -110,6 +112,24 @@ class Data(object):
             pl.ylabel(item[3])
         pl.legend()
         pl.show()
+
+    @property
+    def data_type(self):
+        """
+        :return: data type
+        """
+        if self.true_data_type:
+            self.true_data_type = self.true_data_type
+        else:
+            if self.maxdisp/(self.maxdisp-self.mindisp) >= 0.1 and self.mindisp/(self.maxdisp-self.mindisp) <= -0.1:
+                self.true_data_type = 'cyc_full'
+            else:
+                index_keypoint = 0
+                for index in range(len(self.disp_list)-1):
+                    if self.disp_list[index]*self.disp_list[index+1] <= 0:
+                        index_keypoint = index
+                self.true_data_type = 'mono' if index_keypoint <= 0.1 * len(self.disp_list) else 'cyc_half'
+        return self.true_data_type
 
     def plotcurve(self):
         """
@@ -337,25 +357,21 @@ class Data(object):
             line_alpha = [[point_0d1[0], point_0d4[0]], [point_0d1[1], point_0d4[1]]]
             k2 = 1.0 / 6.0 * k1
             tangent_point_list = self.tangent_point(curve, k2)
-            print(tangent_point_list)
-            for tangent_point in tangent_point_list:
-                line_beta = [[0, tangent_point[0]], [tangent_point[1] - tangent_point[0] * k2, tangent_point[1]]]
-                possible_point = self.cross_point(line_alpha, line_beta)[0]
-                if disp_range:
+            line_beta = None
+            if disp_range:
+                for tangent_point in tangent_point_list:
+                    line_beta = [[0, tangent_point[0]], [tangent_point[1] - tangent_point[0] * k2, tangent_point[1]]]
+                    possible_point = self.cross_point(line_alpha, line_beta)[0]
                     if disp_range[0] <= possible_point[0] <= disp_range[1]:
                         yield_point = possible_point.copy()
-                        # additional plot option
-                        addition = [
-                            [line_alpha[0] + [yield_point[0]], '', line_alpha[1] + [yield_point[1]], '', '', 'b', None],
-                            [line_beta[0], '', line_beta[1], '', '', 'b', None]]
                         break
-                else:
-                    yield_point = possible_point.copy()
-                    # additional plot option
-                    addition = [
-                        [line_alpha[0] + [yield_point[0]], '', line_alpha[1] + [yield_point[1]], '', '', 'b', None],
-                        [line_beta[0], '', line_beta[1], '', '', 'b', None]]
-                    break
+            else:
+                tangent_point = tangent_point_list[0]
+                line_beta = [[0, tangent_point[0]], [tangent_point[1] - tangent_point[0] * k2, tangent_point[1]]]
+            # additional plot option
+            addition = [
+                [line_alpha[0] + [yield_point[0]], '', line_alpha[1] + [yield_point[1]], '', '', 'b', None],
+                [line_beta[0], '', line_beta[1], '', '', 'b', None]]
         elif method.lower() in "eeep":
             pass
         else:

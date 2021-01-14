@@ -24,6 +24,8 @@ class Data(object):
         self.protocol = reprotocol
         self.maxdisp = max(self.disp_list)
         self.mindisp = min(self.disp_list)
+        self.maxforce = max(self.force_list)
+        self.minforce = min(self.force_list)
 
     @staticmethod
     def reorg(data, set_range=None, incr=None, datanumber=100.0):
@@ -48,14 +50,18 @@ class Data(object):
         return reorg_data
 
     @staticmethod
-    def cross_point(line1, line2):
+    def cross_point(line1, line2, extend_left=1.0, extend_rigth=1.0):
         """
         :param line1: the first line
         :param line2: the second line
+        :param extend_left:
+        :param extend_rigth:
         :return: the cross point lists of the two lines
         """
         cross_point_list = []
-        lower_bound, upper_bound = min(line1[0]+line2[0]), max(line1[0]+line2[0])*1.5
+        bound_length = max(line1[0]+line2[0]) - min(line1[0]+line2[0])
+        lower_bound = min(line1[0]+line2[0])-extend_left*bound_length
+        upper_bound = max(line1[0]+line2[0])+extend_rigth*bound_length
         incr = (upper_bound - lower_bound) / 1000.0
         f1 = interp1d(line1[0], line1[1], fill_value='extrapolate')
         f2 = interp1d(line2[0], line2[1], fill_value='extrapolate')
@@ -130,17 +136,18 @@ class Data(object):
     @staticmethod
     def saveitem(item_name_list, item_list, filename):
         """
+        :param item_name_list:
         :param item_list:
         :param filename:
         :return:
         """
-        with open('%s.txt'%filename, "w") as f:
+        with open('%s.txt' % filename, "w") as f:
             for item_name in item_name_list:
                 f.write("%s " % item_name)
             f.write("\n")
             for line_number in range(len(item_list[0])):
                 for item in item_list:
-                    f.write('%f '%item[line_number])
+                    f.write('%f ' % item[line_number])
                 f.write('\n')
         f.close()
 
@@ -186,7 +193,7 @@ class Data(object):
                 moforce_list.append(self.force_list[i])
         modisp_s = [modisp_list[0], modisp_list[1]]
         moforce_s = [moforce_list[0], moforce_list[1]]
-        max_disp, min_disp= modisp_list[0], modisp_list[0]
+        max_disp, min_disp = modisp_list[0], modisp_list[0]
         max_force, min_force = moforce_list[0], moforce_list[0]
         # plot
         pl.xlabel('disp')
@@ -397,17 +404,7 @@ class Data(object):
             self.saveitem(item_name_list, item_list, filename)
         return [cycle_list, energy_list]
 
-    def yield_point(self, method, cyc_trans='positive', disp_range=None, plotopt=None, saveopt=None):
-        """
-        :param method: method for calculating yield point (opt: 'yk', 'eeep', 'cen', 'kc', 'csiro')
-        :param cyc_trans: determine if transfer side of backbone curve for cyc_full data
-                          (default = 'positive', opt:'negative')
-        :param disp_range: pre-defined range for the yield point
-        :param plotopt: determine if plot a figure
-        :param saveopt: determine if save a text file
-        :return: yield_point, in form of [disp, force]
-        """
-        # determine curve
+    def keycurve(self, cyc_trans='positive'):
         curve = None
         if self.data_type.lower() in "mono":
             curve = [self.disp_list, self.force_list]
@@ -429,15 +426,80 @@ class Data(object):
                 raise Exception('cyc_trans not correct')
         # re-organize curve
         curve = self.reorg(curve, incr=self.incr)
+        return curve
+
+    def ult_point(self, method, cyc_trans='positive', plotopt=None, saveopt=None):
+        """
+
+        :param method: method for calculating ultimate point (opt: 'yk', 'eeep', 'cen', 'kc', 'csiro')
+        :param cyc_trans: determine if transfer side of backbone curve for cyc_full data
+                          (default = 'positive', opt:'negative')
+        :param plotopt: determine if plot a figure
+        :param saveopt: determine if save a text file
+        :return: ultimate point, in form of [disp, force]
+        """
+        # determine curve
+        curve = self.keycurve(cyc_trans=cyc_trans)
+        disp_curve, force_curve = curve[0], curve[1]
+        # > calculate ultimate point
+        # declare vars
+        ulti_point = None
+        basics = []
+        maxdisp, maxforce = max(curve[0]), max(curve[1])
+        if method.lower() in ['cen', 'eeep']:
+            force_0d8 = maxforce * 0.8
+            line_0d8 = [[0, maxdisp], [force_0d8, force_0d8]]
+            point_0d8 = self.cross_point(line_0d8, curve, extend_rigth=2.0)
+            maxforce_index = force_curve.index(maxforce)
+            maxforce_disp = disp_curve[maxforce_index]
+            for point_0d8 in point_0d8:
+                point_0d8_disp, point_0d8_force = point_0d8[0], point_0d8[1]
+                if point_0d8_disp >= maxforce_disp:
+                    ulti_point = [point_0d8_disp, point_0d8_force]
+                    label = 'ultimate point' if point_0d8_disp <= disp_curve[-1] else 'Ultimate point(extended)'
+                    basics.append([[point_0d8_disp], '', [point_0d8_force], '', label, "b", "o"])
+                    break
+            if ulti_point is None:
+                raise Exception('Can not find ultimate point')
+        elif method.lower() == 'yk':
+            pass
+        else:
+            raise Exception('Yield calculating method not exists')
+        # determine whether plot a figure
+        if plotopt:
+            if self.data_type.lower() in "mono":
+                basics.append([self.disp_list, 'deformation', self.force_list, 'force', 'Mono Curve', 'k', None],)
+            else:
+                basics.append([self.disp_list, 'deformation', self.force_list, 'force', 'Hysteresis', 'k', None],)
+                basics.append([self.backbone()[0], 'deformation', self.backbone()[1], 'force', 'backbone', "r", "*"])
+            self.plotitem(basics)
+        # determine if save a text file
+        if saveopt:
+            item_name_list, item_list, filename = ['ultimate disp', 'ultimate force'], ulti_point, 'ultimate point'
+            self.saveitem(item_name_list, item_list, filename)
+        return ulti_point
+
+    def yield_point(self, method, cyc_trans='positive', disp_range=None, plotopt=None, saveopt=None):
+        """
+        :param method: method for calculating yield point (opt: 'yk', 'eeep', 'cen', 'kc', 'csiro')
+        :param cyc_trans: determine if transfer side of backbone curve for cyc_full data
+                          (default = 'positive', opt:'negative')
+        :param disp_range: pre-defined range for the yield point
+        :param plotopt: determine if plot a figure
+        :param saveopt: determine if save a text file
+        :return: yield_point, in form of [disp, force]
+        """
+        # determine curve
+        curve = self.keycurve(cyc_trans=cyc_trans)
         # > calculate yield point
         # declare vars
         yield_point = [None, None]
         basics = []
         addition = []
-        # y&k method
+        maxdisp, maxforce = max(curve[0]), max(curve[1])
+        # cen method
         if method.lower() in "cen":
-            maxforce, maxdisp = max(self.force_list), max(self.disp_list)
-            force_0d1, force_0d4 = maxforce * 0.1 maxforce * 0.4
+            force_0d1, force_0d4 = maxforce * 0.1, maxforce * 0.4
             line_0d1 = [[0, maxdisp], [force_0d1, force_0d1]]
             line_0d4 = [[0, maxdisp], [force_0d4, force_0d4]]
             point_0d1 = self.cross_point(line_0d1, curve)[0]
@@ -477,7 +539,7 @@ class Data(object):
             self.plotitem(basics, addition=addition)
         # determine if save a text file
         if saveopt:
-            item_name_list, item_list, filename= ['yield disp', 'yield force'], yield_point, 'yield point'
+            item_name_list, item_list, filename = ['yield disp', 'yield force'], yield_point, 'yield point'
             self.saveitem(item_name_list, item_list, filename)
         return yield_point
 

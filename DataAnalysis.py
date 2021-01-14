@@ -543,6 +543,38 @@ class Data(object):
             self.saveitem(item_name_list, item_list, filename)
         return yield_point
 
+    def elstic_stiffness(self, method, cyc_trans='positive', saveopt=None):
+        """
+
+        :param method: method for calculating ultimate point (opt: 'yk', 'eeep', 'cen', 'kc', 'csiro')
+        :param cyc_trans: determine if transfer side of backbone curve for cyc_full data
+                          (default = 'positive', opt:'negative')
+        :param saveopt: determine if save a text file
+        :return: elstic stiffness
+        """
+        # determine curve
+        curve = self.keycurve(cyc_trans=cyc_trans)
+        disp_curve, force_curve = curve[0], curve[1]
+        # > calculate ultimate point
+        # declare vars
+        elstic_stiffness = None
+        maxdisp, maxforce = max(curve[0]), max(curve[1])
+        if method.lower() in 'cen':
+            force_0d1, force_0d4 = maxforce * 0.1, maxforce * 0.4
+            line_0d1 = [[0, maxdisp], [force_0d1, force_0d1]]
+            line_0d4 = [[0, maxdisp], [force_0d4, force_0d4]]
+            point_0d1 = self.cross_point(line_0d1, curve)[0]
+            point_0d4 = self.cross_point(line_0d4, curve)[0]
+            elstic_stiffness = (point_0d4[1] - point_0d1[1]) / (point_0d4[0] - point_0d1[0])
+        elif method.lower() == 'yk':
+            pass
+        else:
+            raise Exception('Calculating method not exists')
+        # determine if save a text file
+        if saveopt:
+            item_name_list, item_list, filename = ['elstic stiffness'], elstic_stiffness, 'elstic stiffness'
+            self.saveitem(item_name_list, item_list, filename)
+        return elstic_stiffness
 
 # if __name__ == '__main__':
     # window = tk.Tk()
